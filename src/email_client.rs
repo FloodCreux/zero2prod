@@ -27,11 +27,11 @@ impl EmailClient {
 
     pub async fn send_email(
         &self,
-        recipient: SubscriberEmail,
+        recipient: &SubscriberEmail,
         subject: &str,
         html_content: &str,
         text_content: &str,
-    ) -> Result<(), reqwest::Error> {
+        ) -> Result<(), reqwest::Error> {
         let url = format!("{}/email", self.base_url);
         let request_body = SendEmailRequest {
             from: self.sender.as_ref(),
@@ -45,7 +45,7 @@ impl EmailClient {
             .header(
                 "X-Postmark-Server-Token",
                 self.authorization_token.expose_secret(),
-            )
+                )
             .json(&request_body)
             .send()
             .await?

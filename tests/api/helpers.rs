@@ -42,8 +42,8 @@ pub struct TestApp {
 }
 
 pub struct ConfirmationLinks {
-    pub html: Sring,
-    pub plain_text: String,
+    pub html: reqwest::Url,
+    pub plain_text: reqwest::Url,
 }
 
 impl TestApp {
@@ -56,6 +56,19 @@ impl TestApp {
             .await
             .expect("Failed to execute request")
     }
+
+    pub async fn post_newletters(
+        &self,
+        body: serde_json::Value,
+        ) -> reqwest::Response {
+        reqwest::Client::new()
+            .post(&format!("{}/newsletters", &self.address))
+            .json(&body)
+            .send()
+            .await
+            .expect("Failed to execute request")
+    }
+
 
     pub fn get_confirmation_links(
         &self,
@@ -74,11 +87,11 @@ impl TestApp {
 
             assert_eq!(links.len(), 1);
             let raw_link = links[0].as_str().to_owned();
-            let mut confirmation_link = reqwest::Url::parse(raw_link).unwrap();
+            let mut confirmation_link = reqwest::Url::parse(&raw_link).unwrap();
 
             assert_eq!(confirmation_link.host_str().unwrap(), "127.0.0.1");
             confirmation_link.set_port(Some(self.port)).unwrap();
-            confirmation_link;
+            confirmation_link
         };
 
         let html = get_link(&body["HtmlBody"].as_str().unwrap());
