@@ -5,6 +5,7 @@ use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
 use actix_web::error::InternalError;
 use actix_web::cookie::Cookie;
+use actix_web_flash_messages::FlashMessage;
 use reqwest::header::LOCATION;
 use secrecy::Secret;
 use sqlx::PgPool;
@@ -47,6 +48,8 @@ pub async fn login(
                     LoginError::UnexpectedError(e.into())
                 },
             };
+
+            FlashMessage::error(e.to_string()).send();
 
             let response = HttpResponse::SeeOther()
                 .insert_header((LOCATION, "/login"))
