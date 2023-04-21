@@ -2,11 +2,15 @@ use actix_web::{web, HttpResponse, HttpRequest, ResponseError};
 use actix_web::http::header::{HeaderMap, HeaderValue};
 use actix_web::http::{StatusCode, header};
 use sqlx::PgPool;
-use crate::{routes::error_chain_fmt, email_client:: EmailClient, domain::SubscriberEmail};
+use crate::{
+    routes::error_chain_fmt, 
+    email_client:: EmailClient, 
+    domain::SubscriberEmail, 
+    authentication::{validate_credentials, AuthError, Credentials},
+};
 use anyhow::Context;
-use secrecy::{Secret, ExposeSecret};
+use secrecy::Secret;
 use base64::Engine;
-use sha3::Digest;
 
 #[derive(thiserror::Error)]
 pub enum PublishError {
@@ -73,7 +77,16 @@ pub async fn publish_newsletter(
         &tracing::field::display(&credentials.username)
     );
 
-    let user_id = validate_credentials(credentials, &pool).await?;
+    let user_id = validate_credentials(credentials, &pool)
+        .await
+        // We match on `AuthError`'s variant, but we pass the **whole** error
+        // into the constructors for `PublishError` variants. This ensures that
+        // the context of the top-level wrapper is preserved when the error is
+        // logged by our middleware
+        .map_err(|e| match e {
+            AuthError::InvalidCredentials(_) => PublishError::AuthError(e.into()),
+            AuthError::UnexpectedError(_) => PublishError::UnexpectedError(e.into()),
+        })?;
 
     tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
 
@@ -109,40 +122,6 @@ pub async fn publish_newsletter(
     }
 
     Ok(HttpResponse::Ok().finish())
-}
-
-struct Credentials {
-    username: String,
-    password: Secret<String>,
-}
-
-async fn validate_credentials(
-    credentials: Credentials,
-    pool: &PgPool,
-) -> Result<uuid::Uuid, PublishError> {
-    let password_hash = sha3::Sha3_256::digest(
-        credentials.password.expose_secret().as_bytes()
-    );
-    // Lowercase hexadecimal encoding
-    let password_hash = format!("{:x}", password_hash);
-    let user_id: Option<_> = sqlx::query!(
-        r#"
-        SELECT user_id
-        FROM users
-        WHERE username = $1 AND password_hash = $2
-        "#,
-        credentials.username,
-        password_hash
-    )
-    .fetch_optional(pool)
-    .await
-    .context("Failed to perform a query to validate auth credentials")
-    .map_err(PublishError::UnexpectedError)?;
-
-    user_id
-        .map(|row| row.user_id)
-        .ok_or_else(|| anyhow::anyhow!("Invalid username or password"))
-        .map_err(PublishError::AuthError)
 }
 
 fn basic_authentication(headers: &HeaderMap) -> Result<Credentials, anyhow::Error> {
