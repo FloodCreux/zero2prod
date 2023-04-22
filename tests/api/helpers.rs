@@ -47,7 +47,7 @@ impl TestUser {
         Self {
             user_id: Uuid::new_v4(),
             username: Uuid::new_v4().to_string(),
-            password: Uuid::new_v4().to_string()
+            password: "everythinghastostartsomewhere".into()
         }
     }
 
@@ -56,13 +56,14 @@ impl TestUser {
         // We don't care about the exact Argon2 parameters here
         // given that it's for testing purposes
         let password_hash = Argon2::new(
-                Algorithm::Argon2id,
-                Version::V0x13,
-                Params::new(15000, 2, 1, None).unwrap(),
+            Algorithm::Argon2id,
+            Version::V0x13,
+            Params::new(15000, 2, 1, None).unwrap(),
             )
             .hash_password(self.password.as_bytes(), &salt)
             .unwrap()
             .to_string();
+        dbg!(&password_hash);
 
         sqlx::query!(
             "INSERT INTO users (user_id, username, password_hash) \
@@ -175,15 +176,16 @@ impl TestApp {
             .unwrap()
     }
 
-    pub async fn get_admin_dashboard(&self) -> String {
+    pub async fn get_admin_dashboard(&self) -> reqwest::Response {
         self.api_client
             .get(&format!("{}/admin/dashboard", &self.address))
             .send()
             .await
             .expect("Failed to execute request")
-            .text()
-            .await
-            .unwrap()
+    }
+
+    pub async fn get_admin_dashboard_html(&self) -> String {
+        self.get_admin_dashboard().await.text().await.unwrap()
     }
 }
 
